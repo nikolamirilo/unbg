@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://unbg.app/sitemap.xml",
+    sitemap: "https://unbg.tech/sitemap.xml",
   };
 }

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://unbg.app";
+const SITE_URL = "https://unbg.tech";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [

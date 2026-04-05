@@ -7,7 +7,7 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-const SITE_URL = "https://unbg.app";
+const SITE_URL = "https://unbg.tech";
 const SITE_NAME = "unbg";
 const SITE_DESCRIPTION =
   "Remove image backgrounds instantly for free. No sign-up, no upload to servers - runs 100% in your browser with AI. Download high-quality transparent PNGs.";
