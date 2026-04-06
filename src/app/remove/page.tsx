@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ImageItem } from "@/types";
-import { filterValidImages, readFilesAsDataUrls } from "@/lib/files";
+import { filterValidImages } from "@/lib/files";
 import { downloadImage, downloadAllImages } from "@/lib/download";
+import { consumeFiles } from "@/lib/image-store";
 import { useImageProcessor } from "@/hooks/useImageProcessor";
 import Logo from "@/components/Logo";
 import ProgressBar from "@/components/ProgressBar";
@@ -32,24 +33,21 @@ export default function RemovePage() {
     isRevealing,
   } = useImageProcessor(images);
 
-  // Load images from sessionStorage
+  // Load images from in-memory store
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
 
-    const raw = sessionStorage.getItem("unbg_images");
-    sessionStorage.removeItem("unbg_images");
-
-    if (!raw) {
+    const files = consumeFiles();
+    if (!files || files.length === 0) {
       router.push("/");
       return;
     }
 
-    const parsed: { name: string; data: string }[] = JSON.parse(raw);
     setImages(
-      parsed.map((p) => ({
-        name: p.name,
-        originalUrl: p.data,
+      files.map((f) => ({
+        name: f.name,
+        originalUrl: URL.createObjectURL(f),
         resultUrl: null,
         status: "pending",
       })),
@@ -73,13 +71,12 @@ export default function RemovePage() {
   }, [images.length, processNext, updateImage]);
 
   // Add more images
-  const handleAddImages = useCallback(async (files: FileList | File[]) => {
+  const handleAddImages = useCallback((files: FileList | File[]) => {
     const valid = filterValidImages(files);
     if (valid.length === 0) return;
-    const results = await readFilesAsDataUrls(valid);
-    const newItems: ImageItem[] = results.map((p) => ({
-      name: p.name,
-      originalUrl: p.data,
+    const newItems: ImageItem[] = valid.map((f) => ({
+      name: f.name,
+      originalUrl: URL.createObjectURL(f),
       resultUrl: null,
       status: "pending",
     }));

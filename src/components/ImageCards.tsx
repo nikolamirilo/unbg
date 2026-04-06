@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef } from "react";
 import type { ImageItem } from "@/types";
 
 export default function ImageCards({
@@ -14,8 +13,6 @@ export default function ImageCards({
   onSelect: (index: number) => void;
   onAddImages: (files: FileList | File[]) => void;
 }) {
-  const addInputRef = useRef<HTMLInputElement>(null);
-
   return (
     <div
       role="listbox"
@@ -105,11 +102,22 @@ export default function ImageCards({
         );
       })}
 
-      <button
-        onClick={() => addInputRef.current?.click()}
-        aria-label="Add more images"
+      {/* <label> natively opens file picker on tap — reliable on mobile */}
+      <label
         className="cursor-pointer aspect-square rounded-xl border-2 border-dashed border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50 flex flex-col items-center justify-center gap-2 transition-all"
       >
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              onAddImages(e.target.files);
+              e.target.value = "";
+            }
+          }}
+          className="sr-only"
+        />
         <svg
           className="h-7 w-7 text-gray-400"
           fill="none"
@@ -125,22 +133,7 @@ export default function ImageCards({
           />
         </svg>
         <span className="text-xs font-medium text-gray-400">Add more</span>
-      </button>
-      <input
-        ref={addInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        multiple
-        onChange={(e) => {
-          if (e.target.files && e.target.files.length > 0) {
-            onAddImages(e.target.files);
-            e.target.value = "";
-          }
-        }}
-        className="hidden"
-        aria-hidden="true"
-        tabIndex={-1}
-      />
+      </label>
     </div>
   );
 }

@@ -1,10 +1,13 @@
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
 export function filterValidImages(files: FileList | File[]): File[] {
-  return Array.from(files).filter(
-    (f) => ACCEPTED_TYPES.some((t) => f.type === t) && f.size <= MAX_FILE_SIZE,
-  );
+  return Array.from(files).filter((f) => {
+    // On mobile, some browsers report non-standard MIME types (e.g. image/jpg,
+    // image/heic) or even empty strings for gallery picks. Accept any file whose
+    // type starts with "image/" to handle these cases.
+    const isImage = f.type.startsWith("image/") || /\.(png|jpe?g|webp|heic|heif)$/i.test(f.name);
+    return isImage && f.size <= MAX_FILE_SIZE;
+  });
 }
 
 export function readFilesAsDataUrls(
