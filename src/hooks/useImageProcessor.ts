@@ -36,7 +36,8 @@ export function useImageProcessor(images: ImageItem[]) {
 
       try {
         const resultUrl = await removeImageBackground(
-          current[idx].originalUrl,
+          current[idx].originalBlob,
+          current[idx].name,
           setProgress,
         );
 

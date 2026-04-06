@@ -1,16 +1,20 @@
+import { convertToDecodableBlob } from "./image-convert";
+
 export type ProgressCallback = (message: string) => void;
 
 export async function removeImageBackground(
-  imageUrl: string,
+  blob: Blob,
+  fileName: string,
   onProgress: ProgressCallback,
 ): Promise<string> {
   const { removeBackground } = await import("@imgly/background-removal");
 
-  onProgress("Loading AI model...");
-  const resp = await fetch(imageUrl);
-  const blob = await resp.blob();
+  onProgress("Preparing image...");
+  const decodable = await convertToDecodableBlob(blob, fileName);
 
-  const resultBlob = await removeBackground(blob, {
+  onProgress("Loading AI model...");
+
+  const resultBlob = await removeBackground(decodable, {
     output: { format: "image/png", quality: 1.0 },
     progress: (key: string, current: number, total: number) => {
       if (key.includes("fetch")) {

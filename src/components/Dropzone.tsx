@@ -48,7 +48,7 @@ export default function Dropzone() {
       >
         <input
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/jpg,image/webp"
           multiple
           onChange={(e) => {
             if (e.target.files && e.target.files.length > 0)

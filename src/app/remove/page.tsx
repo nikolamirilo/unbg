@@ -48,6 +48,7 @@ export default function RemovePage() {
       files.map((f) => ({
         name: f.name,
         originalUrl: URL.createObjectURL(f),
+        originalBlob: f,
         resultUrl: null,
         status: "pending",
       })),
@@ -77,6 +78,7 @@ export default function RemovePage() {
     const newItems: ImageItem[] = valid.map((f) => ({
       name: f.name,
       originalUrl: URL.createObjectURL(f),
+      originalBlob: f,
       resultUrl: null,
       status: "pending",
     }));
@@ -90,6 +92,27 @@ export default function RemovePage() {
       setSliderPos(50);
     },
     [setSliderPos],
+  );
+
+  const handleDelete = useCallback(
+    (i: number) => {
+      const remaining = images.filter((_, idx) => idx !== i);
+
+      if (remaining.length === 0) {
+        setImages([]);
+        router.push("/");
+        return;
+      }
+
+      setEditingIndex(null);
+      if (activeIndex >= remaining.length) {
+        setActiveIndex(remaining.length - 1);
+      } else if (i < activeIndex) {
+        setActiveIndex(activeIndex - 1);
+      }
+      setImages(remaining);
+    },
+    [images, activeIndex, router],
   );
 
   const handleBrushDone = useCallback(
@@ -174,6 +197,7 @@ export default function RemovePage() {
               images={images}
               activeIndex={activeIndex}
               onSelect={handleCardSelect}
+              onDelete={handleDelete}
               onAddImages={handleAddImages}
             />
           </div>
