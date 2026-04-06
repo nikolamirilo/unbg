@@ -1,15 +1,3 @@
-/**
- * Converts any image blob to a PNG that the background-removal model can decode.
- *
- * Strategy (each step is a fallback for the previous):
- *  1. createImageBitmap — broadest native format support on modern browsers
- *  2. <img> tag decode   — fallback for browsers without createImageBitmap
- *  3. heic2any library   — JS-based HEIC/HEIF decoder for Android browsers
- *     that can't handle Apple's format natively
- *
- * After decoding, the image is drawn to a canvas and exported as PNG.
- */
-
 function canvasToPngBlob(
   source: HTMLImageElement | ImageBitmap,
   width: number,
@@ -26,7 +14,8 @@ function canvasToPngBlob(
     }
     ctx.drawImage(source, 0, 0);
     canvas.toBlob(
-      (result) => (result ? resolve(result) : reject(new Error("Canvas export failed"))),
+      (result) =>
+        result ? resolve(result) : reject(new Error("Canvas export failed")),
       "image/png",
     );
   });
@@ -53,7 +42,11 @@ function tryImgElement(blob: Blob): Promise<Blob | null> {
     img.onload = async () => {
       URL.revokeObjectURL(url);
       try {
-        const png = await canvasToPngBlob(img, img.naturalWidth, img.naturalHeight);
+        const png = await canvasToPngBlob(
+          img,
+          img.naturalWidth,
+          img.naturalHeight,
+        );
         resolve(png);
       } catch {
         resolve(null);
@@ -118,7 +111,8 @@ export async function convertToDecodableBlob(
     if (fromHeic) {
       // The heic2any output is a standard PNG/JPEG blob, but run it through
       // canvas to guarantee consistency.
-      const decoded = await tryImageBitmap(fromHeic) ?? await tryImgElement(fromHeic);
+      const decoded =
+        (await tryImageBitmap(fromHeic)) ?? (await tryImgElement(fromHeic));
       if (decoded) return decoded;
       return fromHeic;
     }
@@ -129,7 +123,8 @@ export async function convertToDecodableBlob(
   if (!isHeic(blob)) {
     const fromHeic = await tryHeicConvert(blob);
     if (fromHeic) {
-      const decoded = await tryImageBitmap(fromHeic) ?? await tryImgElement(fromHeic);
+      const decoded =
+        (await tryImageBitmap(fromHeic)) ?? (await tryImgElement(fromHeic));
       if (decoded) return decoded;
       return fromHeic;
     }
