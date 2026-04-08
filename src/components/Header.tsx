@@ -61,7 +61,7 @@ export default function Header() {
           </button>
 
           <Link
-            href="#hero"
+            href="/#hero"
             className="hidden sm:flex rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors flex-row gap-2 justify-center items-center"
           >
             <MdOutlineRocketLaunch aria-hidden="true" /> Get Started
@@ -105,7 +105,7 @@ export default function Header() {
               Blog
             </Link>
             <Link
-              href="#hero"
+              href="/#hero"
               onClick={() => setMobileOpen(false)}
               className="mt-2 rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors flex flex-row gap-2 justify-center items-center"
             >
