@@ -36,6 +36,11 @@ export const metadata: Metadata = {
     "image background remover free",
     "photo background remover",
     "automatic background removal",
+    "background remover no upload",
+    "offline background remover",
+    "private background remover",
+    "browser based background remover",
+    "no sign up background remover",
     "unbg",
   ],
   authors: [{ name: SITE_NAME }],
@@ -161,6 +166,18 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: SITE_NAME,
+              url: SITE_URL,
+              logo: `${SITE_URL}/logo.png`,
+            }),
+          }}
         />
       </head>
       <body className="min-h-screen flex flex-col font-sans bg-white text-gray-900 antialiased">

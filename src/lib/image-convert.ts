@@ -104,7 +104,7 @@ export async function convertToDecodableBlob(
   const fromImg = await tryImgElement(blob);
   if (fromImg) return fromImg;
 
-  // Native decode failed — likely HEIC on a non-Safari browser.
+  // Native decode failed - likely HEIC on a non-Safari browser.
   // Use the JS HEIC decoder.
   if (isHeic(blob) || (fileName && looksLikeHeicByName(fileName))) {
     const fromHeic = await tryHeicConvert(blob);
@@ -118,7 +118,7 @@ export async function convertToDecodableBlob(
     }
   }
 
-  // Last resort: try HEIC conversion even without MIME match — some Android
+  // Last resort: try HEIC conversion even without MIME match - some Android
   // browsers report HEIC files as "application/octet-stream" or empty string.
   if (!isHeic(blob)) {
     const fromHeic = await tryHeicConvert(blob);

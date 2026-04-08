@@ -19,23 +19,29 @@ export default function Header() {
         {/* Desktop nav */}
         <div className="hidden items-center gap-6 sm:flex">
           <a
-            href="#how-it-works"
+            href="/how-it-works"
             className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
             How it works
           </a>
           <a
-            href="#use-cases"
+            href="/use-cases"
             className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
             Use cases
           </a>
           <a
-            href="#faq"
+            href="/#faq"
             className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
             FAQ
           </a>
+          <Link
+            href="/blog"
+            className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            Blog
+          </Link>
         </div>
 
         <div className="flex items-center gap-3">
@@ -71,26 +77,33 @@ export default function Header() {
         >
           <div className="flex flex-col gap-1">
             <a
-              href="#how-it-works"
+              href="/how-it-works"
               onClick={() => setMobileOpen(false)}
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
             >
               How it works
             </a>
             <a
-              href="#use-cases"
+              href="/use-cases"
               onClick={() => setMobileOpen(false)}
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
             >
               Use cases
             </a>
             <a
-              href="#faq"
+              href="/#faq"
               onClick={() => setMobileOpen(false)}
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
             >
               FAQ
             </a>
+            <Link
+              href="/blog"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+              Blog
+            </Link>
             <Link
               href="#hero"
               onClick={() => setMobileOpen(false)}

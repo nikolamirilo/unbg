@@ -1,5 +1,5 @@
 // In-memory store for transferring files between pages.
-// Survives client-side navigation (SPA) but not hard reloads — which is fine
+// Survives client-side navigation (SPA) but not hard reloads - which is fine
 // since the files would need to be re-picked anyway.
 
 let pending: File[] | null = null;

@@ -102,7 +102,7 @@ export default function ImageCards({
               </div>
             </button>
 
-            {/* Delete button — visible on hover (desktop) or always on touch */}
+            {/* Delete button - visible on hover (desktop) or always on touch */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
