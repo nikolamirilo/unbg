@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
-type BrushMode = "erase" | "restore";
+type BrushMode = "erase" | "restore" | "move";
 
 interface BrushEditorProps {
   originalUrl: string;
@@ -10,6 +10,10 @@ interface BrushEditorProps {
   onDone: (editedBlobUrl: string) => void;
   onCancel: () => void;
 }
+
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 5;
+const ZOOM_STEP = 0.5;
 
 export default function BrushEditor({
   originalUrl,
@@ -19,6 +23,9 @@ export default function BrushEditor({
 }: BrushEditorProps) {
   const [mode, setMode] = useState<BrushMode>("erase");
   const [brushSize, setBrushSize] = useState(30);
+  const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
+  const [grabbing, setGrabbing] = useState(false);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -30,6 +37,12 @@ export default function BrushEditor({
   const isPaintingRef = useRef(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
   const scaleRef = useRef(1);
+  // Fit-to-wrapper display size at zoom 1; zoomed size is this times `zoom`.
+  const baseDisplayRef = useRef({ w: 0, h: 0 });
+  // Canvas translation (in screen px) within the wrapper, used while panning.
+  const panRef = useRef({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
   // Load both images into memory
   useEffect(() => {
@@ -55,6 +68,37 @@ export default function BrushEditor({
     resImg.onload = onLoad;
   }, [originalUrl, resultUrl]);
 
+  // Clamp a pan offset so the (centered) canvas can't be dragged off-screen.
+  const clampPan = useCallback((x: number, y: number, z: number) => {
+    const wrapper = wrapperRef.current;
+    const base = baseDisplayRef.current;
+    if (!wrapper) return { x: 0, y: 0 };
+    const maxX = Math.max(0, (base.w * z - wrapper.clientWidth) / 2);
+    const maxY = Math.max(0, (base.h * z - wrapper.clientHeight) / 2);
+    return {
+      x: Math.min(maxX, Math.max(-maxX, x)),
+      y: Math.min(maxY, Math.max(-maxY, y)),
+    };
+  }, []);
+
+  // Apply the current zoom + pan to the canvas without touching pixel data,
+  // so edits survive zoom changes. Recomputes the display->image scale too.
+  const applyView = useCallback(() => {
+    const canvas = canvasRef.current;
+    const base = baseDisplayRef.current;
+    if (!canvas || base.w === 0) return;
+
+    const dispW = base.w * zoom;
+    const dispH = base.h * zoom;
+    canvas.style.width = `${dispW}px`;
+    canvas.style.height = `${dispH}px`;
+    scaleRef.current = canvas.width / dispW;
+
+    const clamped = clampPan(panRef.current.x, panRef.current.y, zoom);
+    panRef.current = clamped;
+    canvas.style.transform = `translate(${clamped.x}px, ${clamped.y}px)`;
+  }, [zoom, clampPan]);
+
   const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const resImg = resultImgRef.current;
@@ -65,27 +109,41 @@ export default function BrushEditor({
     canvas.width = resImg.naturalWidth;
     canvas.height = resImg.naturalHeight;
 
-    // Calculate display scale
+    // Calculate fit-to-wrapper display size (zoom 1)
     const wrapperW = wrapper.clientWidth;
     const aspect = resImg.naturalWidth / resImg.naturalHeight;
     const displayW = wrapperW;
     const displayH = wrapperW / aspect;
     const maxH = Math.min(window.innerHeight * 0.56, 500);
 
+    let baseW: number;
+    let baseH: number;
     if (displayH > maxH) {
-      canvas.style.width = `${maxH * aspect}px`;
-      canvas.style.height = `${maxH}px`;
-      scaleRef.current = resImg.naturalWidth / (maxH * aspect);
+      baseW = maxH * aspect;
+      baseH = maxH;
     } else {
-      canvas.style.width = `${displayW}px`;
-      canvas.style.height = `${displayH}px`;
-      scaleRef.current = resImg.naturalWidth / displayW;
+      baseW = displayW;
+      baseH = displayH;
     }
+    baseDisplayRef.current = { w: baseW, h: baseH };
+
+    // Pin the wrapper height so zooming overflows it (giving room to pan into)
+    // instead of growing the page.
+    wrapper.style.height = `${baseH}px`;
 
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(resImg, 0, 0);
-  }, []);
+
+    applyView();
+  }, [applyView]);
+
+  // Reapply the view whenever the zoom level changes, and mirror zoom into a
+  // ref so the (once-attached) wheel listener always sees the latest value.
+  useEffect(() => {
+    zoomRef.current = zoom;
+    applyView();
+  }, [zoom, applyView]);
 
   // Resize handler
   useEffect(() => {
@@ -93,6 +151,43 @@ export default function BrushEditor({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [initCanvas]);
+
+  // Mouse-wheel / trackpad zoom, centered on the pointer. Registered as a
+  // non-passive native listener so it can preventDefault — React's onWheel is
+  // passive and can't. At the zoom limits it does nothing and lets the page
+  // scroll normally.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const onWheel = (e: WheelEvent) => {
+      const z0 = zoomRef.current;
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      const z1 = Math.min(
+        ZOOM_MAX,
+        Math.max(ZOOM_MIN, Math.round(z0 * factor * 100) / 100),
+      );
+      if (z1 === z0) return;
+      e.preventDefault();
+
+      // Keep the image point under the cursor fixed while zooming. C is the
+      // cursor offset from the wrapper center; the canvas is centered then
+      // translated by pan, so the new pan that pins that point is:
+      //   pan' = C - (C - pan) * (z1 / z0)
+      const rect = wrapper.getBoundingClientRect();
+      const cx = e.clientX - rect.left - rect.width / 2;
+      const cy = e.clientY - rect.top - rect.height / 2;
+      const ratio = z1 / z0;
+      panRef.current = {
+        x: cx - (cx - panRef.current.x) * ratio,
+        y: cy - (cy - panRef.current.y) * ratio,
+      };
+      setZoom(z1);
+    };
+
+    wrapper.addEventListener("wheel", onWheel, { passive: false });
+    return () => wrapper.removeEventListener("wheel", onWheel);
+  }, []);
 
   const getCanvasPos = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -147,19 +242,54 @@ export default function BrushEditor({
   );
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+
+    if (mode === "move") {
+      isPanningRef.current = true;
+      setGrabbing(true);
+      panStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
+      };
+      return;
+    }
+
     isPaintingRef.current = true;
     const pos = getCanvasPos(e.clientX, e.clientY);
     if (pos) {
       lastPosRef.current = pos;
       paint(pos.x, pos.y);
     }
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    // Pan: translate the canvas, leaving its pixels untouched.
+    if (isPanningRef.current) {
+      const dx = e.clientX - panStartRef.current.x;
+      const dy = e.clientY - panStartRef.current.y;
+      const clamped = clampPan(
+        panStartRef.current.panX + dx,
+        panStartRef.current.panY + dy,
+        zoom,
+      );
+      panRef.current = clamped;
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.style.transform = `translate(${clamped.x}px, ${clamped.y}px)`;
+      }
+      return;
+    }
+
+    // Position the brush cursor relative to the wrapper, since the cursor
+    // element is absolutely positioned within it. The canvas may be centered
+    // (with horizontal/vertical gaps) inside the wrapper, so measuring against
+    // the canvas would offset the visible cursor from the actual pointer.
+    const rect = wrapper.getBoundingClientRect();
     setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
 
     if (!isPaintingRef.current) return;
@@ -172,7 +302,18 @@ export default function BrushEditor({
 
   const handlePointerUp = () => {
     isPaintingRef.current = false;
+    isPanningRef.current = false;
+    setGrabbing(false);
     lastPosRef.current = null;
+  };
+
+  const zoomIn = () =>
+    setZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 10) / 10));
+  const zoomOut = () =>
+    setZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 10) / 10));
+  const resetZoom = () => {
+    panRef.current = { x: 0, y: 0 };
+    setZoom(1);
   };
 
   const handleDone = () => {
@@ -186,7 +327,7 @@ export default function BrushEditor({
     }, "image/png");
   };
 
-  // Keyboard shortcuts for brush size and mode
+  // Keyboard shortcuts for brush size, mode and zoom
   const handleCanvasKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "[") {
       setBrushSize((s) => Math.max(5, s - 5));
@@ -196,6 +337,14 @@ export default function BrushEditor({
       setMode("erase");
     } else if (e.key === "r") {
       setMode("restore");
+    } else if (e.key === "h") {
+      setMode("move");
+    } else if (e.key === "+" || e.key === "=") {
+      zoomIn();
+    } else if (e.key === "-" || e.key === "_") {
+      zoomOut();
+    } else if (e.key === "0") {
+      resetZoom();
     }
   };
 
@@ -205,7 +354,7 @@ export default function BrushEditor({
       <div className="flex flex-wrap items-center gap-2 sm:gap-3 rounded-xl border border-gray-200 bg-white px-3 sm:px-4 py-2.5 shadow-sm">
         {/* Mode toggle */}
         <fieldset className="flex rounded-lg bg-gray-100 p-0.5">
-          <legend className="sr-only">Brush mode</legend>
+          <legend className="sr-only">Tool</legend>
           <button
             onClick={() => setMode("erase")}
             aria-pressed={mode === "erase"}
@@ -256,6 +405,31 @@ export default function BrushEditor({
             </svg>
             Restore
           </button>
+          <button
+            onClick={() => setMode("move")}
+            aria-pressed={mode === "move"}
+            className={`cursor-pointer flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all min-h-[44px] ${
+              mode === "move"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-700"
+            }`}
+          >
+            <svg
+              className="h-3.5 w-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M7.5 4.5L9 9M3.75 12h4.5m-4.5 0L9 15m-5.25-3L9 9m11.25 3h-4.5m4.5 0L15 15m5.25-3L15 9M12 3.75L9 9m3-5.25L15 9m-3-5.25v16.5m0 0L9 15m3 5.25L15 15"
+              />
+            </svg>
+            Move
+          </button>
         </fieldset>
 
         {/* Divider */}
@@ -299,6 +473,78 @@ export default function BrushEditor({
           </span>
         </div>
 
+        {/* Divider */}
+        <div className="h-6 w-px bg-gray-200 hidden sm:block" aria-hidden="true" />
+
+        {/* Zoom controls */}
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={zoomOut}
+            disabled={zoom <= ZOOM_MIN}
+            aria-label="Zoom out"
+            className="cursor-pointer flex items-center justify-center rounded-md p-2 text-gray-600 hover:bg-gray-100 transition-colors min-h-[44px] min-w-[44px] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12h-15" />
+            </svg>
+          </button>
+          <span
+            className="text-[11px] font-medium text-gray-500 w-11 text-center tabular-nums"
+            aria-live="polite"
+          >
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={zoomIn}
+            disabled={zoom >= ZOOM_MAX}
+            aria-label="Zoom in"
+            className="cursor-pointer flex items-center justify-center rounded-md p-2 text-gray-600 hover:bg-gray-100 transition-colors min-h-[44px] min-w-[44px] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4.5v15m7.5-7.5h-15"
+              />
+            </svg>
+          </button>
+          <button
+            onClick={resetZoom}
+            disabled={zoom === 1 && panRef.current.x === 0 && panRef.current.y === 0}
+            aria-label="Reset zoom"
+            className="cursor-pointer flex items-center justify-center rounded-md p-2 text-gray-600 hover:bg-gray-100 transition-colors min-h-[44px] min-w-[44px] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5 5.25 5.25"
+              />
+            </svg>
+          </button>
+        </div>
+
         {/* Spacer */}
         <div className="flex-1" />
 
@@ -321,12 +567,15 @@ export default function BrushEditor({
       <div
         ref={wrapperRef}
         className="relative rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden checkerboard flex items-center justify-center"
-        style={{ cursor: "none" }}
+        style={{
+          cursor:
+            mode === "move" ? (grabbing ? "grabbing" : "grab") : "none",
+        }}
       >
         <canvas
           ref={canvasRef}
           tabIndex={0}
-          aria-label={`Drawing canvas. Current mode: ${mode}. Brush size: ${brushSize}. Press E for erase, R for restore, [ and ] to change brush size.`}
+          aria-label={`Drawing canvas. Current tool: ${mode}. Brush size: ${brushSize}. Zoom: ${Math.round(zoom * 100)} percent. Press E for erase, R for restore, H to move, [ and ] to change brush size, + and - to zoom, 0 to reset zoom, or scroll to zoom toward the pointer.`}
           onKeyDown={handleCanvasKeyDown}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -339,7 +588,7 @@ export default function BrushEditor({
         />
 
         {/* Custom brush cursor */}
-        {cursorPos && (
+        {cursorPos && mode !== "move" && (
           <div
             className="pointer-events-none absolute rounded-full border-2"
             aria-hidden="true"
