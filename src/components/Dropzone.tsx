@@ -4,10 +4,17 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { filterValidImages } from "@/lib/files";
 import { storeFiles } from "@/lib/image-store";
+import { warmModelCache } from "@/lib/model-cache";
 
 export default function Dropzone() {
   const [isDragging, setIsDragging] = useState(false);
   const router = useRouter();
+
+  // Hover, focus or a drag all mean an upload is likely. Start pulling the
+  // model now so the first removal does not open with a download.
+  const warm = useCallback(() => {
+    void warmModelCache();
+  }, []);
 
   const handleFiles = useCallback(
     (files: FileList | File[]) => {
@@ -32,9 +39,11 @@ export default function Dropzone() {
     <form onSubmit={(e) => e.preventDefault()}>
       <label
         onDrop={handleDrop}
+        onPointerEnter={warm}
         onDragOver={(e) => {
           e.preventDefault();
           setIsDragging(true);
+          warm();
         }}
         onDragLeave={(e) => {
           e.preventDefault();
@@ -50,6 +59,7 @@ export default function Dropzone() {
           type="file"
           accept="image/png,image/jpeg,image/jpg,image/webp"
           multiple
+          onFocus={warm}
           onChange={(e) => {
             if (e.target.files && e.target.files.length > 0)
               handleFiles(e.target.files);
