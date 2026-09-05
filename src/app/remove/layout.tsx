@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import ModelCacheProvider from "@/components/ModelCacheProvider";
+
 export const metadata: Metadata = {
   title: "Remove Background - Processing Your Images",
   description:
@@ -12,5 +14,10 @@ export default function RemoveLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <>
+      <ModelCacheProvider />
+      {children}
+    </>
+  );
 }

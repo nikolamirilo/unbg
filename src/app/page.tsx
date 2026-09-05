@@ -1,4 +1,5 @@
 import Header from "@/components/Header";
+import ModelCacheProvider from "@/components/ModelCacheProvider";
 import Footer from "@/components/Footer";
 import Hero from "@/components/sections/Hero";
 import SocialProof from "@/components/sections/SocialProof";
@@ -11,6 +12,7 @@ import BottomCta from "@/components/sections/BottomCta";
 export default function Home() {
   return (
     <>
+      <ModelCacheProvider />
       <Header />
 
       <main id="main-content" className="flex-1">

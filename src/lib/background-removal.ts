@@ -15,6 +15,9 @@ export async function removeImageBackground(
   onProgress("Loading AI model...");
 
   const resultBlob = await removeBackground(decodable, {
+    // Pinned rather than left to the library default, so an upgrade cannot
+    // quietly switch models and invalidate what model-cache.ts warms.
+    model: "isnet_fp16",
     output: { format: "image/png", quality: 1.0 },
     progress: (key: string, current: number, total: number) => {
       if (key.includes("fetch")) {
